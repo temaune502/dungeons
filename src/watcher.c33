@@ -1,0 +1,54 @@
+module gameofmydream::watcher;
+import file_watcher;
+import std::io;
+import raylib6;
+
+FileEvent[32] events;
+fn FileWatcher init_watcher(String dir)
+{
+	BackedArenaAllocator* arena = allocators::new_backed_allocator(131072, mem)!!;
+    FileWatcher fw;
+
+	if (!file_watcher::fw_init(&fw, arena, dir))
+    {
+        io::printn("Error initialization file watcher.");
+    }
+	else
+	{
+		io::printfn("Initialize seccesful watching folder %s", dir);
+	}
+	return fw;
+}
+
+fn void process_changes(FileWatcher* fw)
+{
+    // Статична змінна зберігатиме час останнього опитування між викликами
+    static double last_poll_time = 0.0;
+    double current_time = rl::get_time();
+
+    // Опитуємо файлову систему лише раз на 0.25 секунди (4 рази на секунду)
+    if (current_time - last_poll_time < 0.25)
+    {
+        return; 
+    }
+    last_poll_time = current_time;
+
+    uint count = file_watcher::fw_poll(fw, &events, 32);
+    for (uint i = 0; i < count; i++)
+    {
+        io::print(current_time);
+        io::print(" Подія: ");
+        switch (events[i].type)
+        {
+            case EVENT_CREATED: io::print("CREATED ");
+            case EVENT_DELETED: io::print("DELETED ");
+            case EVENT_MODIFIED: io::print("MODIFIED ");
+            default: io::print("UNKNOWN ");
+        }
+        
+        io::printn((ZString)events[i].path[0..events[i].path_len]);
+    }
+}
+
+	
+	

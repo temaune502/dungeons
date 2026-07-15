@@ -1,0 +1,9 @@
+config = 
+    {   
+        player = {
+            zoom = 13.9;
+        }
+        window = {
+            window_title = "My dficking GAME!";
+        }
+    }

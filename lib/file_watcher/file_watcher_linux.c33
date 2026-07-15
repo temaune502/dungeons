@@ -1,0 +1,163 @@
+module file_watcher_linux;
+
+import std::core::mem;
+import std::core::mem::alloc;
+
+const uint MAX_PATH_LEN = 260;
+
+// Ті самі публічні типи
+enum FileEventType : uint
+{
+    EVENT_NONE,
+    EVENT_CREATED,
+    EVENT_DELETED,
+    EVENT_MODIFIED
+}
+
+struct FileEvent
+{
+    FileEventType type;
+    char[MAX_PATH_LEN] path; 
+    uint path_len;
+}
+
+// У Linux нам не потрібні масиви файлів!
+// Ми зберігаємо лише дескриптори від ядра.
+struct FileWatcher
+{
+    int inotify_fd;
+    int watch_fd;
+    bool is_initialized;
+    Allocator allocator; // Залишаємо для сумісності загального API, хоч тут він і не потрібен
+}
+
+// ==========================================
+// FFI для Linux (libc)
+// ==========================================
+
+// Константи inotify
+const int IN_NONBLOCK = 0x800;      // (O_NONBLOCK 04000)
+const uint IN_MODIFY = 0x00000002;
+const uint IN_MOVED_FROM = 0x00000040;
+const uint IN_MOVED_TO = 0x00000080;
+const uint IN_CREATE = 0x00000100;
+const uint IN_DELETE = 0x00000200;
+
+struct Inotify_event {
+    int wd;
+    uint mask;
+    uint cookie;
+    uint len;
+    // name йде відразу після структури
+}
+
+extern fn int inotify_init1(int flags) @cname("inotify_init1");
+extern fn int inotify_add_watch(int fd, char* pathname, uint mask) @cname("inotify_add_watch");
+extern fn int inotify_rm_watch(int fd, int wd) @cname("inotify_rm_watch");
+extern fn sz read(int fd, void* buf, usz count) @cname("read");
+extern fn int close(int fd) @cname("close");
+
+// ==========================================
+// Логіка для Linux
+// ==========================================
+
+fn bool fw_init(FileWatcher* fw, Allocator allocator, char* path)
+{
+    fw.allocator = allocator;
+    
+    // Створюємо inotify instance в неблокуючому режимі (щоб poll не зависав)
+    fw.inotify_fd = inotify_init1(IN_NONBLOCK);
+    if (fw.inotify_fd < 0) return false;
+
+    // Підписуємося на створення, видалення, модифікацію та перейменування
+    uint mask = IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVED_FROM | IN_MOVED_TO;
+    
+    fw.watch_fd = inotify_add_watch(fw.inotify_fd, path, mask);
+    if (fw.watch_fd < 0)
+    {
+        close(fw.inotify_fd);
+        return false;
+    }
+    
+    fw.is_initialized = true;
+    return true;
+}
+
+fn uint fw_poll(FileWatcher* fw, FileEvent* out_events, uint max_events)
+{
+    if (!fw.is_initialized || out_events == null || max_events == 0) return 0;
+
+    // Читаємо події від ядра в буфер
+    char[4096] buf = {};
+    sz bytes_read = read(fw.inotify_fd, &buf, 4096);
+    
+    if (bytes_read <= 0) return 0; // Немає подій або помилка
+
+    uint event_count = 0;
+    sz i = 0;
+
+    while (i + (sz)Inotify_event::size <= bytes_read && event_count < max_events)
+    {
+        Inotify_event* ev = (Inotify_event*)&buf[i];
+        
+        if (ev.len > 0)
+        {
+            FileEventType type = EVENT_NONE;
+            
+            if (ev.mask & IN_CREATE) 
+			{
+				type = EVENT_CREATED;
+			} else if (ev.mask & IN_DELETE) 
+			{
+				type = EVENT_DELETED;
+			}
+            else if (ev.mask & IN_MODIFY)
+			{
+				type = EVENT_MODIFIED;
+			}
+			else if (ev.mask & IN_MOVED_FROM)
+			{ 
+				type = EVENT_DELETED;
+			}
+            else if (ev.mask & IN_MOVED_TO) 
+			{
+				type = EVENT_CREATED;
+			}
+
+            if (type != EVENT_NONE)
+            {
+                out_events[event_count].type = type;
+                
+                // Вказівник на ім'я файлу (відразу після структури)
+                char* name_ptr = (char*)&buf[i + (sz)Inotify_event::size];
+                
+                // Шукаємо справжню довжину рядка (inotify доповнює нулями)
+                uint real_len = 0;
+                while (name_ptr[real_len] != '\0' && real_len < ev.len && real_len < MAX_PATH_LEN - 1)
+                {
+                    out_events[event_count].path[real_len] = name_ptr[real_len];
+                    real_len++;
+                }
+                out_events[event_count].path[real_len] = '\0';
+                out_events[event_count].path_len = real_len;
+                
+                event_count++;
+            }
+        }
+        
+        // Переходимо до наступної події у буфері
+        i += (sz)Inotify_event::size + (sz)ev.len;
+    }
+
+    return event_count;
+}
+
+fn void fw_destroy(FileWatcher* fw)
+{
+    if (fw.is_initialized)
+    {
+        inotify_rm_watch(fw.inotify_fd, fw.watch_fd);
+        close(fw.inotify_fd);
+        fw.is_initialized = false;
+    }
+}

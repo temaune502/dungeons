@@ -21,6 +21,9 @@ struct Core
 	ConfigEngine*  ce;
 	Config*        config;
 	RLVector2      window_size;
+	int frame_counter;
+	int current_frame;
+	int frame_speed;
 	float          delta;
 }
 struct Config
@@ -51,11 +54,10 @@ fn void on_file_modified(ZString path, void* user_data)
 
 fn void init_game()
 {
-	rl::set_config_flags(VSYNC_HINT);
-	rl::set_config_flags(WINDOW_RESIZABLE);
+	//rl::set_config_flags(VSYNC_HINT);
 	rl::set_config_flags(WINDOW_RESIZABLE);
 	rl::set_config_flags(WINDOW_HIGHDPI);
-	rl::set_target_fps(60);
+	rl::set_target_fps((int)onyx::ce_get_int_def(core.ce,"config.fps", 32));
 	rl::init_window(800, 600, core.config.window_title);
 	rl::set_exit_key(NONE);
 }
@@ -69,8 +71,9 @@ fn void load_config()
 	char[]? config_data =  file::load_temp("configs/config.onx");
 	onyx::ce_parse(&ce, (String)config_data)!!;
 
-	core.config.window_title = (ZString)onyx::ce_get_string_def(core.ce,"config.window.window_title", "Default");
+	core.config.window_title = onyx::ce_get_string_def(core.ce,"config.window.window_title", "Default");
 	core.player.camera.zoom = (float)onyx::ce_get_float_def(core.ce,"config.player.zoom", 0.10);
+	core.player.animation_speed = (float)onyx::ce_get_float_def(core.ce,"config.player.animation_speed", 0.10);
 
 }
 
@@ -80,9 +83,12 @@ fn void reload_config()
 	char[]? config_data =  file::load(tmem, "configs/config.onx");
 	onyx::ce_parse(core.ce, (String)config_data)!!;
 	core.player.camera.zoom = (float)onyx::ce_get_float_def(core.ce,"config.player.zoom", 0.10);
+	rl::set_target_fps((int)onyx::ce_get_int_def(core.ce,"config.fps", 32));
 
 	core.config.window_title = (ZString)onyx::ce_get_string_def(core.ce,"config.window.window_title", "Default");
 	rl::set_window_title((ZString)core.config.window_title);
+
+	core.player.animation_speed = (float)onyx::ce_get_float_def(core.ce,"config.player.animation_speed", 0.10);
 }
 
 fn int main(String[] args)
@@ -106,12 +112,12 @@ fn int main(String[] args)
     io::printn("Моніторинг запущено...");
 
 	
-	main::init_game();
 	
 	Entity player = player::init();
 	core.player = &player;
 	main::load_config();
-
+	main::init_game();
+	
 	assets::get_assets(&player);
 	//assets::get_assets();
 	while (!rl::window_should_close())
@@ -120,6 +126,7 @@ fn int main(String[] args)
 		RLVector2  window_size = {rl::get_render_width(),rl::get_render_height()};
 		core.delta = delta;
 		core.window_size = window_size;
+		
 
 		file_watcher::fw_poll(&fw);
 		
@@ -139,6 +146,7 @@ fn int main(String[] args)
 		rl::draw_text((ZString)pos_text, 80, 0, 20, rl::BLACK);
 
 		rl::end_drawing();
+		player.frames_count++;
 	}
 	defer onyx::ce_free(core.ce);
 	defer file_watcher::fw_destroy(&fw);

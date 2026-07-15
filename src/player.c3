@@ -15,6 +15,10 @@ struct Entity
 	RLVector2 d;
 	RLCamera2D camera;
 	RLTexture2D texture;
+	int current_frame;
+	int frames_count;
+	float frame_timer;
+	float animation_speed;
 	bool is_active;
 	int speed;
 
@@ -32,8 +36,8 @@ fn Entity init()
 	player.camera.target = player.pos;
 	player.camera.zoom = 0.9;
 	player.speed= main::SPEED;
-	player.camera.offset = {(float)rl::get_render_width()/2, (float)rl::get_render_height()/2};
-
+	player.animation_speed = 1.9;
+	player.current_frame = 0;
 	player.is_active = true;
 
 	return player;
@@ -81,6 +85,7 @@ fn void Entity.update (Entity* self, float delta)
 			self.pos.x += dx;
         	self.pos.y += dy;
 			self.camera.target = self.pos;
+			self.camera.offset = {(float)rl::get_render_width()/2, (float)rl::get_render_height()/2};
 		}
 	}
 }

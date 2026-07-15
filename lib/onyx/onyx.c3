@@ -77,18 +77,36 @@ fn String str_slice(String s, sz start, sz len) {
 
 fn String str_dup(Allocator alloc, String src) {
     if (src.len <= 0) return "";
-    char* ptr = (char*)alloc::malloc(alloc, (usz)src.len);
+    
+    // 1. Виділяємо на 1 байт більше для нуль-термінатора
+    char* ptr = (char*)alloc::malloc(alloc, (usz)(src.len + 1));
+    
+    // 2. Копіюємо сам текст
     mem::copy(ptr, src.ptr, (usz)src.len);
+    
+    // 3. Явно ставимо нуль в кінці! Це "відріже" будь-яке сміття від попередніх конфігів
+    ptr[src.len] = '\0';
+    
+    // Повертаємо слайс (твій синтаксис залишаємо без змін)
     return (String)ptr[0 .. src.len - 1];
 }
 
 fn String join_path(Allocator alloc, String parent, String child) {
     if (parent.len <= 0) return str_dup(alloc, child);
+    
     sz total_len = parent.len + 1 + child.len;
-    char* ptr = (char*)alloc::malloc(alloc, (usz)total_len);
+    
+    // 1. Виділяємо на 1 байт більше
+    char* ptr = (char*)alloc::malloc(alloc, (usz)(total_len + 1));
+    
+    // 2. Збираємо шлях докупи
     mem::copy(ptr, parent.ptr, (usz)parent.len);
     ptr[parent.len] = '.';
     mem::copy(ptr + parent.len + 1, child.ptr, (usz)child.len);
+    
+    // 3. Явно ставимо нуль в кінці
+    ptr[total_len] = '\0';
+    
     return (String)ptr[0 .. total_len - 1];
 }
 
@@ -594,20 +612,20 @@ fn double ce_get_float(ConfigEngine* ce, String path) {
     return ce_get_float_def(ce, path, 0.0);
 }
 
-fn String ce_get_string_def(ConfigEngine* ce, String path, String default_val) {
+fn ZString ce_get_string_def(ConfigEngine* ce, String path, ZString default_val) {
     Node* n = ce_resolve_path(ce, path);
     if (n == null) {
         io::printfn("[Config Info] Поле '%s' відсутнє. Використано default: %s", path, default_val);
         return default_val;
     }
     if (ce_evaluate(ce, n)) {
-        if (n.type == NodeType.STRING) return n.data.string_val;
+        if (n.type == NodeType.STRING) return (ZString)n.data.string_val;
 
         io::printfn("[Config Warn] Поле '%s' має невідповідний тип (очікувався string). Використано default: %s", path, default_val);
     }
     return default_val;
 }
 
-fn String ce_get_string(ConfigEngine* ce, String path) {
+fn ZString ce_get_string(ConfigEngine* ce, String path) {
     return ce_get_string_def(ce, path, "");
 }

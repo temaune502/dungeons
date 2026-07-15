@@ -1,9 +1,11 @@
 config = 
     {   
+        fps = 60;
         player = {
-            zoom = 13.9;
+            zoom = 13.9/3;
+            animation_speed = 4.6;
         }
         window = {
-            window_title = "My dficking GAME!";
+            window_title = "My fucking GAME!";
         }
     }

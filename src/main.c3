@@ -30,6 +30,7 @@ struct Core
 	ConfigEngine*  ce;
 	Config*        config;
 	RLVector2      window_size;
+	int current_fps;
 	int frame_counter;
 	int current_frame;
 	int frame_speed;
@@ -133,6 +134,7 @@ fn int main(String[] args)
 	while (!rl::window_should_close())
 	{
 		float delta = rl::get_frame_time();
+		core.current_fps = rl::get_fps();
 		RLVector2  window_size = {rl::get_render_width(),rl::get_render_height()};
 		core.delta = delta;
 		core.window_size = window_size;

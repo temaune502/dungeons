@@ -19,11 +19,11 @@ fn void Entity.draw(Entity* self)
 			case RIGHT:
 				self.animation_padding = 32;
 			case UP:
-				self.animation_padding = 64;
+				self.animation_padding = 63;
 			case LEFT:
 				self.animation_padding = 96;
 		}
-		if (self.frames_count >= (60/self.animation_speed))
+		if (self.frames_count >= (main::core.current_fps/self.animation_speed))
 		{
 			self.frames_count = 0;
 			self.current_frame++;

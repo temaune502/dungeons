@@ -79,6 +79,7 @@ fn void Entity.update(Entity* self, float delta)
         // Рахуємо довжину вектора (без урахування часу)
         float length = (float)math::sqrt((float)(dx * dx + dy * dy));
         self.animation_state = WALKING;
+
         // Нормалізуємо (отримуємо вектор довжиною 1.0)
         dx /= length;
         dy /= length;
@@ -89,6 +90,7 @@ fn void Entity.update(Entity* self, float delta)
 	} 
 	else {
 		self.animation_state = IDLE;
+		self.current_frame = 0;
 	}
 
     self.pos.x += dx;

@@ -9,10 +9,15 @@ struct Assets
 	RLTexture2D background;
 }
 
-fn void get_assets() 
+fn void load_basick_assets() 
 {
 	main::core.assets.player_atlas = rl::load_texture("assets/player/character.png");
 	main::core.assets.player_atlas.set_filter(ANISOTROPIC_16X);
 	main::core.player.texture = main::core.assets.player_atlas;
 
+}
+
+fn void unload_assets()
+{
+	rl::unload_texture(main::core.assets.player_atlas);
 }

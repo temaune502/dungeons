@@ -96,8 +96,5 @@ fn void Entity.update(Entity* self, float delta)
     self.pos.y += dy;
 
     self.camera.target = self.pos;
-    self.camera.offset = {
-        (float)main::core.window_size.x / 2.0, 
-        (float)main::core.window_size.y / 2.0
-    };
+    self.camera.offset = main::core.half_window;
 }

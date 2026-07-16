@@ -30,6 +30,7 @@ struct Core
 	ConfigEngine*  ce;
 	Config*        config;
 	RLVector2      window_size;
+	RLVector2 half_window;
 	int current_fps;
 	int frame_counter;
 	int current_frame;
@@ -64,7 +65,7 @@ fn void on_file_modified(ZString path, void* user_data)
 
 fn void init_game()
 {
-	//rl::set_config_flags(VSYNC_HINT);
+	rl::set_config_flags(VSYNC_HINT);
 	rl::set_config_flags(WINDOW_RESIZABLE);
 	rl::set_config_flags(MSAA_4X_HINT);
 	rl::set_config_flags(WINDOW_HIGHDPI);
@@ -130,18 +131,34 @@ fn int main(String[] args)
 	main::load_config();
 	main::init_game();
 	
-	assets::get_assets();
-	//assets::get_assets();
+	assets::load_basick_assets();
+	RLVector2  window_size = {rl::get_render_width(),rl::get_render_height()};
+	RLVector2 half_window = {
+		(float)window_size.x / 2.0, 
+		(float)window_size.y / 2.0
+	};
+	core.window_size = window_size;
+	core.half_window = half_window;
+
+
 	while (!rl::window_should_close())
 	{
 		float delta = rl::get_frame_time();
 		core.current_fps = rl::get_fps();
-		RLVector2  window_size = {rl::get_render_width(),rl::get_render_height()};
 		core.delta = delta;
-		core.window_size = window_size;
+		if (rl::is_window_resized())
+		{
+			window_size = {rl::get_render_width(),rl::get_render_height()};
+			half_window = {
+			(float)core.window_size.x / 2.0, 
+			(float)core.window_size.y / 2.0
+			};
+			core.window_size = window_size;
+			core.half_window = half_window;
+		}
 		
 
-		file_watcher::fw_poll(&fw);
+		//file_watcher::fw_poll(&fw);
 		
 		player.update(delta);
 		
@@ -163,6 +180,7 @@ fn int main(String[] args)
 	}
 	defer onyx::ce_free(core.ce);
 	defer file_watcher::fw_destroy(&fw);
+	defer assets::unload_assets();
 	defer rl::close_window();
 	return 0;
 }

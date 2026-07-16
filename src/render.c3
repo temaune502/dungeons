@@ -2,7 +2,43 @@ module main::render;
 import main::player;
 import raylib6::rl;
 
-fn void draw(Entity* self)
+fn void  draw_background()
+{
+	// RLRectangle rect = {
+	// 	.x = 0,
+	// 	.y =0,
+	// 	.width = 32,
+	// 	.height = 16
+	// };
+	// RLVector2 pos = {0,0};
+	// rl::draw_texture_rec(main::core.assets.background, rect ,pos, rl::WHITE);
+
+
+	RLRectangle rect = {
+		.x = 0,
+		.y =0,
+		.width = 16,
+		.height = 16
+	};
+
+	RLRectangle dest = {
+		.x = 0,
+		.y =0,
+		.width = 128*10,
+		.height = 128*10
+	};
+
+	rl::draw_texture_pro(main::core.assets.background,
+						 rect, 
+						 dest, 
+						 (RLVector2){0,0}, 
+						 2.9, 
+						 rl::WHITE);
+
+
+}
+
+fn void draw_player(Entity* self)
 {
     // Формуємо Rectangle максимально явно
     RLRectangle source_rec;
@@ -32,13 +68,13 @@ fn void draw(Entity* self)
 	}
     // Малюємо
 	//rl::draw_rectangle_rec(source_rec, rl::BLACK);
-	rl::draw_rectangle_lines_ex(
-								(RLRectangle){
-									.x = self.pos.x,
-									.y = self.pos.y,
-									.width = source_rec.width,
-									.height = source_rec.height,
-								}, 1.4, rl::ORANGE);
+	// rl::draw_rectangle_lines_ex(
+	// 							(RLRectangle){
+	// 								.x = self.pos.x,
+	// 								.y = self.pos.y,
+	// 								.width = source_rec.width,
+	// 								.height = source_rec.height,
+	// 							}, 1.4, rl::ORANGE);
     rl::draw_texture_rec(self.texture, source_rec, self.pos, rl::WHITE);
 
 }

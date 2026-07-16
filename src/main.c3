@@ -42,7 +42,6 @@ struct Config
 	ZString window_title;
 	int     x;
 	int     y;
-	float   temp;
 }
 
 fn void on_file_created(ZString path, void* user_data)
@@ -125,7 +124,6 @@ fn int main(String[] args)
     io::printn("Моніторинг запущено...");
 
 	
-	
 	Entity player = player::init();
 	core.player = &player;
 	main::load_config();
@@ -168,7 +166,8 @@ fn int main(String[] args)
 		rl::begin_mode2d(player.camera);
 
 			rl::draw_rectangle(0,0, 100*10, 200*3,rl::BLUE);
-			render::draw(&player);
+			render::draw_background();
+			render::draw_player(&player);
 		
 		rl::end_mode2d();
 		rl::draw_fps(0, 0);

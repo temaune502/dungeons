@@ -20,6 +20,7 @@ fn void load_basick_assets()
 	//World texture atlas
 	main::core.assets.background = rl::load_texture("assets/Overworld.png");
 	main::core.assets.background.set_filter(ANISOTROPIC_16X);
+	main::core.assets.background.set_wrap(REPEAT);
 	rl::gen_texture_mipmaps(&main::core.assets.background);
 
 }

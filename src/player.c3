@@ -7,7 +7,11 @@ enum EntityType
 	PLAYER,
 	ENEMY
 }
-
+enum AnimationState
+{
+	IDLE,
+	WALKING
+}
 struct Entity 
 {	
 	EntityType type;
@@ -17,10 +21,11 @@ struct Entity
 	RLTexture2D texture;
 	int current_frame;
 	int frames_count;
+	int speed;
+	Direction direction;
+	bool is_active;
 	float frame_timer;
 	float animation_speed;
-	bool is_active;
-	int speed;
 
 }
 
@@ -31,7 +36,7 @@ fn Entity init()
 
 	Entity player;
 	player.type = PLAYER;
-	player.pos = {(float)rl::get_render_width()/2, (float)rl::get_render_height()/2};
+	player.pos = {100,100};
 	player.camera = camera;
 	player.camera.target = player.pos;
 	player.camera.zoom = 0.9;
@@ -44,48 +49,52 @@ fn Entity init()
 }
 
 
-fn void Entity.update (Entity* self, float delta)
-{	
-	if (self.type == EntityType.PLAYER) {
-		if (self.is_active){
-			float dx = 0.0;
-        	float dy = 0.0;
+fn void Entity.update(Entity* self, float delta)
+{ 
+    // Перевірка на активність гравця
+    if (self.type != EntityType.PLAYER || !self.is_active) {
+        return;
+    }
 
+    // 1. Збір вводу (використовуємо 1.0 як базовий одиничний крок)
+    float dx = 0.0;
+    float dy = 0.0;
 
-			if (rl::is_key_down(D))
-			{
-				dx += (100.0*main::SPEED*delta);
-			} 
-			if (rl::is_key_down(A))
-			{
-				dx -= (100.0*main::SPEED*delta);
-			}
-			if (rl::is_key_down(W))
-			{
-				dy -= (100.0*main::SPEED*delta);
-			}
-			if (rl::is_key_down(S))
-			{
-				dy += (100.0*main::SPEED*delta);
-			}
-			if (rl::is_key_down(R))
-			{
-				self.pos = {0.0,0.0};
-				main::core.config.temp = 0.0;
-			};
+    if (rl::is_key_down(D)) { dx += 1.0; self.direction = RIGHT; }
+    if (rl::is_key_down(A)) { dx -= 1.0; self.direction = LEFT; }
+    if (rl::is_key_down(W)) { dy -= 1.0; self.direction = UP; }
+    if (rl::is_key_down(S)) { dy += 1.0; self.direction = DOWN; }
 
-			if (dx != 0.0 || dy != 0.0) {
-            // Рахуємо довжину вектора
-            float length = (float)math::sqrt((double)(dx * dx + dy * dy));
-            
-            // Робимо довжину рівною 1 і множимо на швидкість гравця
-            dx = (dx / length) * self.speed;
-            dy = (dy / length) * self.speed;
-        	}
-			self.pos.x += dx;
-        	self.pos.y += dy;
-			self.camera.target = self.pos;
-			self.camera.offset = {(float)rl::get_render_width()/2, (float)rl::get_render_height()/2};
-		}
-	}
+    // Логіка скидання
+    if (rl::is_key_down(R)) {
+        self.pos = {0.0, 0.0};
+        main::core.config.temp = 0.0;
+    }
+
+    // 2. Нормалізація та застосування швидкості
+    // Тільки якщо гравець кудись рухається
+    if (dx != 0.0 || dy != 0.0) {
+        // Рахуємо довжину вектора (без урахування часу)
+        float length = (float)math::sqrt((double)(dx * dx + dy * dy));
+        
+        // Нормалізуємо (отримуємо вектор довжиною 1.0)
+        dx /= length;
+        dy /= length;
+
+        // Тепер множимо на швидкість та час (delta)
+        // Це забезпечує Frame-Rate Independence
+        dx *= self.speed * delta;
+        dy *= self.speed * delta;
+    }
+
+    // 3. Оновлення позиції
+    self.pos.x += dx;
+    self.pos.y += dy;
+
+    // 4. Оновлення камери
+    self.camera.target = self.pos;
+    self.camera.offset = {
+        (float)rl::get_render_width() / 2.0, 
+        (float)rl::get_render_height() / 2.0
+    };
 }

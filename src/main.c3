@@ -8,15 +8,24 @@ import file_watcher;
 import main::player;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-const int SPEED = 7;
+const int SPEED = 90;
+Assets assets;
 Config config;
 Core core;
 ConfigEngine ce;
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+enum Direction
+{
+	UP,
+	DOWN,
+	LEFT,
+	RIGHT,
+}
 
 struct Core 
 {
 	Entity*        player;
+	Assets*        assets;
 	FileWatcher*   fw;
 	ConfigEngine*  ce;
 	Config*        config;
@@ -93,8 +102,9 @@ fn void reload_config()
 
 fn int main(String[] args)
 {	
+	core.assets = &assets;
 	core.config = &config;
-
+	
 	String path = rl::get_working_directory().str_view();
 	String config_path = string::format(tmem,"%s/configs", path);
 	
@@ -118,7 +128,7 @@ fn int main(String[] args)
 	main::load_config();
 	main::init_game();
 	
-	assets::get_assets(&player);
+	assets::get_assets();
 	//assets::get_assets();
 	while (!rl::window_should_close())
 	{

@@ -2,7 +2,7 @@ config =
     {   
         fps = 60;
         player = {
-            zoom = 13.9/3;
+            zoom = 1.9;
             animation_speed = 4.6;
         }
         window = {

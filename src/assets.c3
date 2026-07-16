@@ -3,7 +3,16 @@ import raylib6::rl;
 import std::io;
 import main::player;
 
-fn void get_assets(Entity* entity) 
+struct Assets
 {
-	entity.texture = rl::load_texture("assets/player/character.png");
+	RLTexture2D player_atlas;
+	RLTexture2D background;
+}
+
+fn void get_assets() 
+{
+	main::core.assets.player_atlas = rl::load_texture("assets/player/character.png");
+	main::core.assets.player_atlas.set_filter(ANISOTROPIC_16X);
+	main::core.player.texture = main::core.assets.player_atlas;
+
 }

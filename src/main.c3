@@ -30,19 +30,19 @@ struct Core
 	ConfigEngine*  ce;
 	Config*        config;
 	RLVector2      window_size;
-	RLVector2 half_window;
-	int current_fps;
-	int frame_counter;
-	int current_frame;
-	int frame_speed;
+	RLVector2      half_window;
+	int            current_fps;
+	int            frame_counter;
+	int            current_frame;
+	int            frame_speed;
 	float          delta;
 }
 struct Config
 {
 	ZString window_title;
-	int x;
-	int y;
-	float temp;
+	int     x;
+	int     y;
+	float   temp;
 }
 
 fn void on_file_created(ZString path, void* user_data)
@@ -158,7 +158,7 @@ fn int main(String[] args)
 		}
 		
 
-		//file_watcher::fw_poll(&fw);
+		file_watcher::fw_poll(&fw);
 		
 		player.update(delta);
 		
@@ -168,7 +168,7 @@ fn int main(String[] args)
 		rl::begin_mode2d(player.camera);
 
 			rl::draw_rectangle(0,0, 100*10, 200*3,rl::BLUE);
-			player.draw();
+			render::draw(&player);
 		
 		rl::end_mode2d();
 		rl::draw_fps(0, 0);

@@ -12,6 +12,8 @@ enum AnimationState
 	IDLE,
 	WALKING
 }
+
+
 struct Entity 
 {	
 	EntityType type;
@@ -71,7 +73,6 @@ fn void Entity.update(Entity* self, float delta)
     // Логіка скидання
     if (rl::is_key_down(R)) {
         self.pos = {0.0, 0.0};
-        main::core.config.temp = 0.0;
     }
 
     // 2. Нормалізація та застосування швидкості

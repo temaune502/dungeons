@@ -2,7 +2,7 @@ module main::render;
 import main::player;
 import raylib6::rl;
 
-fn void Entity.draw(Entity* self)
+fn void draw(Entity* self)
 {
     // Формуємо Rectangle максимально явно
     RLRectangle source_rec;

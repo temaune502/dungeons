@@ -23,9 +23,11 @@ struct Entity
 	int frames_count;
 	int speed;
 	Direction direction;
+	AnimationState animation_state;
 	bool is_active;
 	float frame_timer;
 	float animation_speed;
+	int animation_padding;
 
 }
 
@@ -43,6 +45,7 @@ fn Entity init()
 	player.speed= main::SPEED;
 	player.animation_speed = 1.9;
 	player.current_frame = 0;
+	player.animation_state = IDLE;
 	player.is_active = true;
 
 	return player;
@@ -61,9 +64,9 @@ fn void Entity.update(Entity* self, float delta)
     float dy = 0.0;
 
     if (rl::is_key_down(D)) { dx += 1.0; self.direction = RIGHT; }
-    if (rl::is_key_down(A)) { dx -= 1.0; self.direction = LEFT; }
-    if (rl::is_key_down(W)) { dy -= 1.0; self.direction = UP; }
-    if (rl::is_key_down(S)) { dy += 1.0; self.direction = DOWN; }
+    if (rl::is_key_down(A)) { dx -= 1.0; self.direction = LEFT;  }
+    if (rl::is_key_down(W)) { dy -= 1.0; self.direction = UP;    }
+    if (rl::is_key_down(S)) { dy += 1.0; self.direction = DOWN;  }
 
     // Логіка скидання
     if (rl::is_key_down(R)) {
@@ -72,29 +75,28 @@ fn void Entity.update(Entity* self, float delta)
     }
 
     // 2. Нормалізація та застосування швидкості
-    // Тільки якщо гравець кудись рухається
     if (dx != 0.0 || dy != 0.0) {
         // Рахуємо довжину вектора (без урахування часу)
-        float length = (float)math::sqrt((double)(dx * dx + dy * dy));
-        
+        float length = (float)math::sqrt((float)(dx * dx + dy * dy));
+        self.animation_state = WALKING;
         // Нормалізуємо (отримуємо вектор довжиною 1.0)
         dx /= length;
         dy /= length;
 
         // Тепер множимо на швидкість та час (delta)
-        // Це забезпечує Frame-Rate Independence
         dx *= self.speed * delta;
         dy *= self.speed * delta;
-    }
+	} 
+	else {
+		self.animation_state = IDLE;
+	}
 
-    // 3. Оновлення позиції
     self.pos.x += dx;
     self.pos.y += dy;
 
-    // 4. Оновлення камери
     self.camera.target = self.pos;
     self.camera.offset = {
-        (float)rl::get_render_width() / 2.0, 
-        (float)rl::get_render_height() / 2.0
+        (float)main::core.window_size.x / 2.0, 
+        (float)main::core.window_size.y / 2.0
     };
 }

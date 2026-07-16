@@ -522,7 +522,7 @@ fn bool ce_evaluate(ConfigEngine* ce, Node* node) {
 
 fn void ce_init(ConfigEngine* ce) {
     // Ініціалізація BackedArenaAllocator з використанням вбудованого mem як бази
-    BackedArenaAllocator* arena = allocators::new_backed_allocator(65536, mem)!!;
+    BackedArenaAllocator* arena = allocators::new_backed_allocator(32768, mem)!!;
     ce.allocator = arena;
 
     ce.root = create_node(ce.allocator, NodeType.OBJECT);

@@ -1,6 +1,6 @@
 config = 
     {   
-        fps = 630;
+        fps = 30*2;
         player = {
             zoom = 3.9;
             animation_speed = 4.6;

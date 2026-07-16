@@ -31,7 +31,14 @@ fn void Entity.draw(Entity* self)
 		}
 	}
     // Малюємо
-	rl::draw_rectangle_rec(source_rec, rl::BLACK);
+	//rl::draw_rectangle_rec(source_rec, rl::BLACK);
+	rl::draw_rectangle_lines_ex(
+								(RLRectangle){
+									.x = self.pos.x,
+									.y = self.pos.y,
+									.width = source_rec.width,
+									.height = source_rec.height,
+								}, 1.4, rl::ORANGE);
     rl::draw_texture_rec(self.texture, source_rec, self.pos, rl::WHITE);
 
 }

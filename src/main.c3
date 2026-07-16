@@ -66,6 +66,7 @@ fn void init_game()
 {
 	//rl::set_config_flags(VSYNC_HINT);
 	rl::set_config_flags(WINDOW_RESIZABLE);
+	rl::set_config_flags(MSAA_4X_HINT);
 	rl::set_config_flags(WINDOW_HIGHDPI);
 	rl::set_target_fps((int)onyx::ce_get_int_def(core.ce,"config.fps", 32));
 	rl::init_window(800, 600, core.config.window_title);

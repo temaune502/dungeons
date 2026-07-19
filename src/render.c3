@@ -53,8 +53,8 @@ fn void  draw_background()
 	RLRectangle rect = {
 		.x = 0,
 		.y =0,
-		.width = 15,
-		.height = 15
+		.width = 16,
+		.height = 16
 	};
 
 	RLRectangle dest = {

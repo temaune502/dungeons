@@ -6,6 +6,11 @@ config =
             animation_speed = 4.6;
         }
         window = {
-            window_title = "My fucking GAME!";
+            window_title = "Game about dungeons!";
         }
     }
+atlas = 
+	{
+		x = 120.0;
+		y = 1;
+	}

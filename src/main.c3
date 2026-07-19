@@ -31,6 +31,7 @@ struct Core
 	Config*        config;
 	RLVector2      window_size;
 	RLVector2      half_window;
+	UIState 	   state;
 	int            current_fps;
 	int            frame_counter;
 	int            current_frame;
@@ -42,6 +43,13 @@ struct Config
 	ZString window_title;
 	int     x;
 	int     y;
+}
+enum UIState
+{
+	MAIN_MENU,
+	ESCAPE_MENU,
+	OPTIONS_MENU,
+	GAME
 }
 
 fn void on_file_created(ZString path, void* user_data)
@@ -102,12 +110,24 @@ fn void reload_config()
 	core.player.animation_speed = (float)onyx::ce_get_float_def(core.ce,"config.player.animation_speed", 0.10);
 }
 
+ButtonStyle standart_style = {
+    .normal  = rl::GRAY,
+    .hover   = rl::LIGHTGRAY,
+    .pressed = rl::DARKGRAY,
+    .text    = rl::WHITE
+};
+ButtonStyle danger_style = {
+    .normal  = (RLColor){ 180, 40, 40, 255 },  
+    .hover   = (RLColor){ 220, 50, 50, 255 },  
+    .pressed = (RLColor){ 120, 20, 20, 255 },
+    .text    = rl::RAYWHITE
+};
 
 fn int main(String[] args)
 {	
 	core.assets = &assets;
 	core.config = &config;
-	
+	core.state = MAIN_MENU;
 	io::printfn("%s",args);
 	String path = rl::get_working_directory().str_view();
 	String config_path = string::format(tmem,"%s/configs", path);
@@ -140,42 +160,72 @@ fn int main(String[] args)
 	core.window_size = window_size;
 	core.half_window = half_window;
 
+	
+	RLVector2 tempp = {1,1};
 
 	while (!rl::window_should_close())
 	{
 		float delta = rl::get_frame_time();
 		core.current_fps = rl::get_fps();
 		core.delta = delta;
-		if (rl::is_window_resized())
-		{
-			window_size = {rl::get_render_width(),rl::get_render_height()};
-			half_window = {
-			(float)core.window_size.x / 2.0, 
-			(float)core.window_size.y / 2.0
-			};
-			core.window_size = window_size;
-			core.half_window = half_window;
-		}
+		if (core.state == MAIN_MENU || core.state == ESCAPE_MENU || core.state == OPTIONS_MENU) { core.player.is_active = false;}
+		else {core.player.is_active = true;}
 		
+		input::handle_keys();
 
+
+		window_size = {rl::get_render_width(),rl::get_render_height()};
+		half_window = {
+		(float)core.window_size.x / 2.0, 
+		(float)core.window_size.y / 2.0
+		};
+		core.window_size = window_size;
+		core.half_window = half_window;
+		
 		file_watcher::fw_poll(&fw);
 		
 		player.update(delta);
 		
 		rl::begin_drawing();
-		rl::clear_background(rl::RAYWHITE);
+		rl::clear_background((RLColor)0x121212);
+		if (core.state == GAME)
+		{
+			rl::begin_mode2d(player.camera);
 
-		rl::begin_mode2d(player.camera);
+				rl::draw_rectangle(0,0, 100*10, 200*3,rl::BLUE);
+				render::draw_background();
+				render::draw_player(&player);
+			
+			rl::end_mode2d();
+			char* pos_text = rl::text_format("X: %.1f, Y: %.1f", player.pos.x, player.pos.y);
+			rl::draw_text((ZString)pos_text, 80, 0, 20, rl::RED);
+		}
+		else  if (core.state == MAIN_MENU)
+		{
+			rl::draw_text((ZString)"Game of my Dream", (int)core.half_window.x-(rl::measure_text((ZString)"Game of my Dream", 22)/2), (int)core.half_window.y-80, 22,rl::WHITE);
 
-			rl::draw_rectangle(0,0, 100*10, 200*3,rl::BLUE);
-			render::draw_background();
-			render::draw_player(&player);
-		
-		rl::end_mode2d();
+			if(gui::do_button((RLRectangle){.x = core.half_window.x,.y = core.half_window.y,.width = 140,.height = 40},"Start Game" , 22, danger_style))
+			{
+				core.state = GAME;
+			}
+			if(gui::do_button((RLRectangle){.x = core.half_window.x,.y = core.half_window.y+50,.width = 80,.height = 40},"Exit" , 22, standart_style))
+			{
+				break;
+			}
+		} 
+		else if (core.state == ESCAPE_MENU)
+		{
+			RLRectangle rect = {
+				.x = (float)onyx::ce_get_float_def(core.ce,"atlas.x", 0.0),
+				.y = (float)onyx::ce_get_float_def(core.ce,"atlas.y", 0.0),
+				.width = 16,
+				.height = 16
+			};
+
+			render::draw_tiled_region(main::core.assets.background, rect, (RLVector2){0,0}, core.window_size.x, core.window_size.y);
+			rl::draw_text((ZString)"Game paused!", (int)core.half_window.x-(rl::measure_text((ZString)"Game of my Dream", 22)/2), (int)core.half_window.y-120, 22,rl::WHITE);
+		}
 		rl::draw_fps(0, 0);
-		char* pos_text = rl::text_format("X: %.1f, Y: %.1f", player.pos.x, player.pos.y);
-		rl::draw_text((ZString)pos_text, 80, 0, 20, rl::BLACK);
-
 		rl::end_drawing();
 		player.frames_count++;
 	}

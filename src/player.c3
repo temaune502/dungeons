@@ -56,12 +56,11 @@ fn Entity init()
 
 fn void Entity.update(Entity* self, float delta)
 { 
-    // Перевірка на активність гравця
     if (self.type != EntityType.PLAYER || !self.is_active) {
         return;
     }
 
-    // 1. Збір вводу (використовуємо 1.0 як базовий одиничний крок)
+
     float dx = 0.0;
     float dy = 0.0;
 
@@ -70,21 +69,17 @@ fn void Entity.update(Entity* self, float delta)
     if (rl::is_key_down(W)) { dy -= 1.0; self.direction = UP;    }
     if (rl::is_key_down(S)) { dy += 1.0; self.direction = DOWN;  }
 
-    // Логіка скидання
+    // для дебага
     if (rl::is_key_down(R)) {
         self.pos = {0.0, 0.0};
     }
 
-    // 2. Нормалізація та застосування швидкості
     if (dx != 0.0 || dy != 0.0) {
-        // Рахуємо довжину вектора (без урахування часу)
         float length = (float)math::sqrt((float)(dx * dx + dy * dy));
         self.animation_state = WALKING;
-        // Нормалізуємо (отримуємо вектор довжиною 1.0)
         dx /= length;
         dy /= length;
 
-        // Тепер множимо на швидкість та час (delta)
         dx *= self.speed * delta;
         dy *= self.speed * delta;
 	} 

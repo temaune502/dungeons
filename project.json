@@ -1,12 +1,12 @@
 {
-  "langrev": "1",
+  "langrev": "0.8.1",
   "warnings":  [ "no-unused" ],
   "dependency-search-paths":  [ "lib" ],
   "wincrt": "none",
   "linker-search-paths":  [  ],
   "link-args":  [ "E:/Probes/GameOfMyDream/lib/raylib6/lib/raylib.lib" ],
   "dependencies":  [],
-  "authors":  [ "John Doe <john.doe@example.com>" ],
+  "authors":  [ "Pavlo Furdyn <temaune502@gmail.com>" ],
   "version": "0.1.0",
   "sources":  [ "src/**", "lib/**" ],
   "test-sources":  [ "test/**" ],
@@ -19,5 +19,5 @@
     }
   },
   "cpu": "generic",
-  "opt": "O0"
+  "opt": "Oz"
 }

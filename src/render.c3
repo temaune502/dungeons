@@ -1,6 +1,42 @@
 module main::render;
 import main::player;
 import raylib6::rl;
+import std::math;
+
+fn void draw_tiled_region(RLTexture2D texture, RLRectangle tile_src, RLVector2 start_pos, float target_width, float target_height)
+{
+    // Округлюємо стартову позицію, щоб вона не мала дробів (наприклад, 10.75 стане 10.0)
+    float start_x = (float)math::floor((double)start_pos.x);
+    float start_y = (float)math::floor((double)start_pos.y);
+
+    for (float y = 0.0; y < target_height; y += tile_src.height)
+    {
+        for (float x = 0.0; x < target_width; x += tile_src.width)
+        {
+            float current_w = tile_src.width;
+            if (x + current_w > target_width) current_w = target_width - x;
+
+            float current_h = tile_src.height;
+            if (y + current_h > target_height) current_h = target_height - y;
+
+            RLRectangle source_rec = {
+                .x = tile_src.x,
+                .y = tile_src.y,
+                // Для розмірів теж краще відкидати дробову частину
+                .width = (float)math::floor((double)current_w),
+                .height = (float)math::floor((double)current_h)
+            };
+
+            // ФІНАЛЬНА ПОЗИЦІЯ ЖОРСТКО ПРИВ'ЯЗАНА ДО ПІКСЕЛІВ
+            RLVector2 position = {
+                .x = start_x + (float)math::floor((double)x),
+                .y = start_y + (float)math::floor((double)y)
+            };
+
+            rl::draw_texture_rec(texture, source_rec, position, rl::WHITE);
+        }
+    }
+}
 
 fn void  draw_background()
 {
@@ -17,8 +53,8 @@ fn void  draw_background()
 	RLRectangle rect = {
 		.x = 0,
 		.y =0,
-		.width = 16,
-		.height = 16
+		.width = 15,
+		.height = 15
 	};
 
 	RLRectangle dest = {
@@ -28,12 +64,15 @@ fn void  draw_background()
 		.height = 128*10
 	};
 
-	rl::draw_texture_pro(main::core.assets.background,
-						 rect, 
-						 dest, 
-						 (RLVector2){0,0}, 
-						 2.9, 
-						 rl::WHITE);
+	// rl::draw_texture_pro(main::core.assets.background,
+	// 					 rect, 
+	// 					 dest, 
+	// 					 (RLVector2){0,0}, 
+	// 					 2.9, 
+	// 					 rl::WHITE);
+
+
+	render::draw_tiled_region(main::core.assets.background, rect, (RLVector2){0,0}, 16*32, 32*32);
 
 
 }

@@ -78,9 +78,9 @@ fn void load_config()
 	
 	onyx::ce_init(&ce);
 	core.ce = &ce;
-	
-	char[]? config_data =  file::load_temp("configs/config.onx");
-	onyx::ce_parse(&ce, (String)config_data)!!;
+	//TODO: виявляється якщо <type>? можна задати значення заумовчання через ??
+	char[] config_data =  file::load_temp("configs/config.onx") ?? "Cringe";
+	onyx::ce_parse(&ce, (String)config_data);
 
 	core.config.window_title = onyx::ce_get_string_def(core.ce,"config.window.window_title", "Default");
 	core.player.camera.zoom = (float)onyx::ce_get_float_def(core.ce,"config.player.zoom", 0.10);
@@ -102,11 +102,13 @@ fn void reload_config()
 	core.player.animation_speed = (float)onyx::ce_get_float_def(core.ce,"config.player.animation_speed", 0.10);
 }
 
+
 fn int main(String[] args)
 {	
 	core.assets = &assets;
 	core.config = &config;
 	
+	io::printfn("%s",args);
 	String path = rl::get_working_directory().str_view();
 	String config_path = string::format(tmem,"%s/configs", path);
 	

@@ -96,6 +96,7 @@ fn void Entity.update(Entity* self, float delta)
     self.pos.x += dx;
     self.pos.y += dy;
 
+    //self.camera.target = (RLVector2){math::round(self.pos.x),math::round(self.pos.y)};
     self.camera.target = self.pos;
-    self.camera.offset = main::core.half_window;
+	self.camera.offset = main::core.half_window;
 }

@@ -3,14 +3,14 @@ config =
         fps = 60;
         player = {
             zoom = 2.9;
-            animation_speed = 4.6;
+            animation_speed = 4.5;
         }
         window = {
-            window_title = "Game about dungeons!";
+            window_title = "Game about dungeons!!";
         }
     }
 atlas = 
 	{
 		x = 120.0;
-		y = 1;
+		y = atlas.x;
 	}

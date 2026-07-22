@@ -6,9 +6,20 @@ import std::core::mem::allocators;
 import std::io;
 import std::core::string;
 import libc;
-//
-// Onyx Configuration Format 
-//
+
+// ==========================================
+// C-Binding для гарантованої роботи з файлами
+// ==========================================
+extern fn void* fopen(char* filename, char* mode) @cname("fopen");
+extern fn int fclose(void* stream) @cname("fclose");
+extern fn int fseek(void* stream, long offset, int origin) @cname("fseek");
+extern fn long ftell(void* stream) @cname("ftell");
+extern fn usz fread(void* ptr, usz size, usz count, void* stream) @cname("fread");
+extern fn int fprintf(void* stream, char* format, ...) @cname("fprintf");
+
+const int SEEK_SET = 0;
+const int SEEK_END = 2;
+
 // ==========================================
 // 1. ТИПИ ДАНИХ ТА СТРУКТУРИ
 // ==========================================
@@ -16,7 +27,7 @@ import libc;
 enum NodeType : uint {
     INT,
     FLOAT,
-    STRING,    // Новий тип для рядкових літералів
+    STRING,
     OBJECT,
     REFERENCE,
     MATH_EXPR
@@ -48,7 +59,7 @@ struct NodeMath {
 union NodeData {
     long int_val;
     double float_val;
-    String string_val; // Поле для збереження значень рядків
+    String string_val; 
     NodeObj obj;
     String ref_path;
     NodeMath math;
@@ -58,17 +69,24 @@ struct Node {
     NodeType type;
     EvalState state;
     NodeData data;
+    bool is_computed; // Позначає, чи був цей вузол виразом або референсом
 }
 
 struct ConfigEngine {
-    allocators::BackedArenaAllocator arena; // Арена, що базується на mem
-    Allocator allocator;             // Інтерфейс алокатора арени
+    DynamicArenaAllocator arena; 
+    Allocator allocator;         
     Node* root;
 }
 
 // ==========================================
 // 2. УТИЛІТИ ДЛЯ ПАМ'ЯТІ ТА РЯДКІВ
 // ==========================================
+
+fn bool str_eq(String a, String b) {
+    if (a.len != b.len) return false;
+    if (a.len == 0) return true;
+    return libc::memcmp(a.ptr, b.ptr, (usz)a.len) == 0;
+}
 
 fn String str_slice(String s, sz start, sz len) {
     if (len <= 0) return "";
@@ -78,16 +96,10 @@ fn String str_slice(String s, sz start, sz len) {
 fn String str_dup(Allocator alloc, String src) {
     if (src.len <= 0) return "";
     
-    // 1. Виділяємо на 1 байт більше для нуль-термінатора
     char* ptr = (char*)alloc::malloc(alloc, (usz)(src.len + 1));
-    
-    // 2. Копіюємо сам текст
     mem::copy(ptr, src.ptr, (usz)src.len);
+    ptr[src.len] = '\0'; // Гарантований нуль-термінатор!
     
-    // 3. Явно ставимо нуль в кінці! Це "відріже" будь-яке сміття від попередніх конфігів
-    ptr[src.len] = '\0';
-    
-    // Повертаємо слайс (твій синтаксис залишаємо без змін)
     return (String)ptr[0 .. src.len - 1];
 }
 
@@ -95,16 +107,11 @@ fn String join_path(Allocator alloc, String parent, String child) {
     if (parent.len <= 0) return str_dup(alloc, child);
     
     sz total_len = parent.len + 1 + child.len;
-    
-    // 1. Виділяємо на 1 байт більше
     char* ptr = (char*)alloc::malloc(alloc, (usz)(total_len + 1));
     
-    // 2. Збираємо шлях докупи
     mem::copy(ptr, parent.ptr, (usz)parent.len);
     ptr[parent.len] = '.';
     mem::copy(ptr + parent.len + 1, child.ptr, (usz)child.len);
-    
-    // 3. Явно ставимо нуль в кінці
     ptr[total_len] = '\0';
     
     return (String)ptr[0 .. total_len - 1];
@@ -115,7 +122,17 @@ fn Node* create_node(Allocator alloc, NodeType type) {
     mem::clear(node, Node::size);
     node.type = type;
     node.state = EvalState.UNTOUCHED;
+    node.is_computed = false;
     return node;
+}
+
+fn void ensure_capacity(Allocator alloc, NodeObj* obj) {
+    if (obj.count >= obj.capacity) {
+        sz new_cap = obj.capacity * 2;
+        if (new_cap == 0) new_cap = 16;
+        obj.fields = (KeyValuePair*)alloc::realloc(alloc, obj.fields, KeyValuePair::size * new_cap);
+        obj.capacity = new_cap;
+    }
 }
 
 // ==========================================
@@ -149,17 +166,14 @@ fn Token lex_next(Lexer* lex) {
 
     while (lex.pos < lex.len) {
         char c = lex.src[lex.pos];
-
         if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
             lex.pos++;
             continue;
         }
-
         if (c == '/' && lex.pos + 1 < lex.len && lex.src[lex.pos+1] == '/') {
             while (lex.pos < lex.len && lex.src[lex.pos] != '\n') lex.pos++;
             continue;
         }
-
         break;
     }
 
@@ -180,17 +194,15 @@ fn Token lex_next(Lexer* lex) {
     if (c == '/') { tok.type = TokenType.SLASH;  tok.text = str_slice(lex.src, lex.pos, 1); lex.pos++; return tok; }
     if (c == '.') { tok.type = TokenType.DOT;    tok.text = str_slice(lex.src, lex.pos, 1); lex.pos++; return tok; }
 
-    // Парсинг рядкових літералів у подвійних лапках "..."
     if (c == '"') {
-        lex.pos++; // Пропускаємо відкриваючу лапку
+        lex.pos++; 
         sz start = lex.pos;
-        while (lex.pos < lex.len && lex.src[lex.pos] != '"') {
-            lex.pos++;
-        }
+        while (lex.pos < lex.len && lex.src[lex.pos] != '"') lex.pos++;
+        
         sz token_len = lex.pos - start;
         tok.text = str_slice(lex.src, start, token_len);
         tok.type = TokenType.STRING_LIT;
-        if (lex.pos < lex.len) lex.pos++; // Пропускаємо закриваючу лапку
+        if (lex.pos < lex.len) lex.pos++; 
         return tok;
     }
 
@@ -300,15 +312,16 @@ fn Node* parse_factor(Parser* p) {
 
                     bool found = false;
                     for (sz i = 0; i < obj.data.obj.count; i++) {
-                        if (obj.data.obj.fields[i].key == path) {
+                        if (str_eq(obj.data.obj.fields[i].key, path)) { 
                             obj.data.obj.fields[i].value = val;
                             found = true;
-                            // Логування перевизначення в об'єкті
-                            io::printfn("[Config Warn] Поле '%s' усередині об'єкта було перевизначено.", path);
+                            // ВИПРАВЛЕНО: Безпечний ZString каст
+                            io::printfn("[Config Warn] Поле '%s' усередині об'єкта було перевизначено.", (ZString)path.ptr);
                             break;
                         }
                     }
                     if (!found) {
+                        ensure_capacity(p.alloc, &obj.data.obj);
                         obj.data.obj.fields[obj.data.obj.count].key = path;
                         obj.data.obj.fields[obj.data.obj.count].value = val;
                         obj.data.obj.count++;
@@ -336,6 +349,7 @@ fn Node* parse_factor(Parser* p) {
 
         Node* n = create_node(p.alloc, NodeType.REFERENCE);
         n.data.ref_path = path;
+        n.is_computed = true; // Маркуємо як динамічне посилання
         return n;
     }
 
@@ -353,6 +367,7 @@ fn Node* parse_term(Parser* p) {
         math_node.data.math.left = left;
         math_node.data.math.right = right;
         math_node.data.math.op = op;
+        math_node.is_computed = true; // Маркуємо як вираз
         left = math_node;
     }
     return left;
@@ -369,6 +384,7 @@ fn Node* parse_expr(Parser* p) {
         math_node.data.math.left = left;
         math_node.data.math.right = right;
         math_node.data.math.op = op;
+        math_node.is_computed = true; // Маркуємо як вираз
         left = math_node;
     }
     return left;
@@ -391,15 +407,16 @@ fn void ce_set_path(ConfigEngine* ce, String path, Node* val) {
             if (is_last) {
                 bool found = false;
                 for (sz j = 0; j < current.data.obj.count; j++) {
-                    if (current.data.obj.fields[j].key == token) {
+                    if (str_eq(current.data.obj.fields[j].key, token)) { 
                         current.data.obj.fields[j].value = val;
                         found = true;
-                        // Логування перевизначення глобального шляху
-                        io::printfn("[Config Warn] Поле за шляхом '%s' було перевизначено.", path);
+                        // ВИПРАВЛЕНО: Безпечний ZString каст
+                        io::printfn("[Config Warn] Поле за шляхом '%s' було перевизначено.", (ZString)path.ptr);
                         break;
                     }
                 }
                 if (!found) {
+                    ensure_capacity(ce.allocator, &current.data.obj);
                     current.data.obj.fields[current.data.obj.count].key = str_dup(ce.allocator, token);
                     current.data.obj.fields[current.data.obj.count].value = val;
                     current.data.obj.count++;
@@ -407,7 +424,7 @@ fn void ce_set_path(ConfigEngine* ce, String path, Node* val) {
             } else {
                 bool found = false;
                 for (sz j = 0; j < current.data.obj.count; j++) {
-                    if (current.data.obj.fields[j].key == token) {
+                    if (str_eq(current.data.obj.fields[j].key, token)) { 
                         current = current.data.obj.fields[j].value;
                         found = true;
                         break;
@@ -419,6 +436,7 @@ fn void ce_set_path(ConfigEngine* ce, String path, Node* val) {
                     new_obj.data.obj.fields = (KeyValuePair*)alloc::malloc(ce.allocator, KeyValuePair::size * 16);
                     new_obj.state = EvalState.RESOLVED;
 
+                    ensure_capacity(ce.allocator, &current.data.obj);
                     current.data.obj.fields[current.data.obj.count].key = str_dup(ce.allocator, token);
                     current.data.obj.fields[current.data.obj.count].value = new_obj;
                     current.data.obj.count++;
@@ -443,7 +461,7 @@ fn Node* ce_resolve_path(ConfigEngine* ce, String path) {
 
             bool found = false;
             for (sz j = 0; j < current.data.obj.count; j++) {
-                if (current.data.obj.fields[j].key == token) {
+                if (str_eq(current.data.obj.fields[j].key, token)) {
                     current = current.data.obj.fields[j].value;
                     found = true;
                     break;
@@ -472,18 +490,23 @@ fn bool ce_evaluate(ConfigEngine* ce, Node* node) {
         case NodeType.REFERENCE:
             Node* target = ce_resolve_path(ce, node.data.ref_path);
             if (target == null) {
-                io::printfn("[Config Error] Не знайдено змінну: %s", node.data.ref_path);
+                // ВИПРАВЛЕНО
+                io::printfn("[Config Error] Не знайдено змінну: %s", (ZString)node.data.ref_path.ptr);
+                node.state = EvalState.UNTOUCHED; 
                 return false;
             }
-            if (!ce_evaluate(ce, target)) return false;
+            if (!ce_evaluate(ce, target)) {
+                node.state = EvalState.UNTOUCHED; 
+                return false;
+            }
 
             node.type = target.type;
             node.data = target.data;
             break;
 
         case NodeType.MATH_EXPR:
-            if (!ce_evaluate(ce, node.data.math.left)) return false;
-            if (!ce_evaluate(ce, node.data.math.right)) return false;
+            if (!ce_evaluate(ce, node.data.math.left)) { node.state = EvalState.UNTOUCHED; return false; }
+            if (!ce_evaluate(ce, node.data.math.right)) { node.state = EvalState.UNTOUCHED; return false; }
 
             Node* l = node.data.math.left;
             Node* r = node.data.math.right;
@@ -497,7 +520,14 @@ fn bool ce_evaluate(ConfigEngine* ce, Node* node) {
             if (op == '+') res_f = val_l + val_r;
             if (op == '-') res_f = val_l - val_r;
             if (op == '*') res_f = val_l * val_r;
-            if (op == '/') res_f = val_l / val_r;
+            if (op == '/') {
+                if (val_r == 0.0) {
+                    io::printn("[Config Error] Ділення на нуль!");
+                    node.state = EvalState.UNTOUCHED;
+                    return false;
+                }
+                res_f = val_l / val_r;
+            }
 
             if (is_float) {
                 node.type = NodeType.FLOAT;
@@ -521,9 +551,8 @@ fn bool ce_evaluate(ConfigEngine* ce, Node* node) {
 // ==========================================
 
 fn void ce_init(ConfigEngine* ce) {
-    // Ініціалізація BackedArenaAllocator з використанням вбудованого mem як бази
-    BackedArenaAllocator* arena = allocators::new_backed_allocator(32768, mem)!!;
-    ce.allocator = arena;
+    ce.arena.init(mem, 32768);
+    ce.allocator = &ce.arena;
 
     ce.root = create_node(ce.allocator, NodeType.OBJECT);
     ce.root.data.obj.capacity = 32;
@@ -531,9 +560,8 @@ fn void ce_init(ConfigEngine* ce) {
     ce.root.state = EvalState.RESOLVED;
 }
 
-// Звільняє абсолютно всі ресурси рушія моментально
 fn void ce_free(ConfigEngine* ce) {
-    alloc::free(ce.allocator, &ce.arena); 
+    ce.arena.free(); 
 }
 
 fn void ce_parse(ConfigEngine* ce, String text) {
@@ -572,19 +600,143 @@ fn void ce_parse(ConfigEngine* ce, String text) {
     }
 }
 
-// Геттери зі значеннями за замовчуванням (Default) та логуванням
+// ------------------------------------------
+// НОВЕ: Завантаження та парсинг напряму з файлу
+// ------------------------------------------
+fn bool ce_parse_file(ConfigEngine* ce, ZString file_path) {
+    void* f = fopen((char*)file_path, "rb");
+    if (f == null) {
+        io::printfn("[Config Error] Не вдалося відкрити файл конфігурації: %s", file_path);
+        return false;
+    }
+    
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    if (fsize <= 0) {
+        fclose(f);
+        return false;
+    }
+    
+    // Виділяємо буфер в арені — він житиме стільки ж, скільки конфіг
+    char* buffer = (char*)alloc::malloc(ce.allocator, (usz)(fsize + 1));
+    fread(buffer, 1, (usz)fsize, f);
+    fclose(f);
+    
+    buffer[fsize] = '\0';
+    String text = (String)buffer[0 .. (usz)fsize - 1];
+    ce_parse(ce, text);
+    
+    return true;
+}
+
+// ------------------------------------------
+// Збереження вузла у файл (Захист від виразів)
+// ------------------------------------------
+fn bool ce_save_node(ConfigEngine* ce, String path, ZString file_path) {
+    Node* n = ce_resolve_path(ce, path);
+    if (n == null) {
+        io::printfn("[Config Error] Поле '%s' не знайдено для збереження.", (ZString)path.ptr);
+        return false;
+    }
+    
+    // Якщо вузол був створений як вираз (навіть якщо він уже обчислений)
+    if (n.is_computed) {
+        io::printfn("[Config Error] Відмова: поле '%s' містить вираз або референс.", (ZString)path.ptr);
+        return false;
+    }
+    
+    if (!ce_evaluate(ce, n)) return false;
+
+    void* f = fopen((char*)file_path, "w");
+    if (f == null) {
+        io::printfn("[Config Error] Не вдалося відкрити файл для запису: %s", file_path);
+        return false;
+    }
+
+    if (n.type == NodeType.INT) {
+        fprintf(f, "%s = %ld;\n", (char*)path.ptr, n.data.int_val);
+    } else if (n.type == NodeType.FLOAT) {
+        fprintf(f, "%s = %f;\n", (char*)path.ptr, n.data.float_val);
+    } else if (n.type == NodeType.STRING) {
+        fprintf(f, "%s = \"%s\";\n", (char*)path.ptr, (char*)n.data.string_val.ptr);
+    } else {
+        io::printfn("[Config Error] Непідтримуваний тип (наприклад об'єкт) для '%s'", (ZString)path.ptr);
+        fclose(f);
+        return false;
+    }
+    
+    fclose(f);
+    io::printfn("[Config Info] Змінну '%s' успішно збережено у файл %s", (ZString)path.ptr, file_path);
+    return true;
+}
+fn bool ce_save_node_smart(ConfigEngine* ce, String path, ZString file_path) {
+    Node* n = ce_resolve_path(ce, path);
+    if (n == null || n.is_computed) {
+        io::printn("[Config Error] Поле не знайдено або це вираз!");
+        return false;
+    }
+    
+    // Формуємо нове значення як рядок для запису
+    char[128] val_buf;
+    if (n.type == NodeType.INT){ libc::snprintf(&val_buf[0], 128, "%ld", n.data.int_val);}
+    else if (n.type == NodeType.FLOAT) {libc::snprintf(&val_buf[0], 128, "%f", n.data.float_val);}
+    else if (n.type == NodeType.STRING) {libc::snprintf(&val_buf[0], 128, "\"%s\"", (char*)n.data.string_val.ptr);}
+    else {return false;}
+
+    // Відкриваємо оригінал для читання та тимчасовий файл для запису
+    void* f = fopen((char*)file_path, "r");
+    if (f == null) {return false; }// Якщо файлу нема, просто записуємо в "w"
+    
+    ZString tmp_path = "config.tmp";
+    void* tmp = fopen((char*)tmp_path, "w");
+    
+    char[512] line;
+    bool found = false;
+    
+    // Читаємо рядок за рядком
+    while (libc::fgets(&line[0], 512, f) != null) {
+        // Перевіряємо, чи починається рядок з нашого ключа (дуже проста перевірка)
+        // Для надійності краще використовувати str_slice та порівняння, як у лексері
+        if (libc::memcmp(&line[0], path.ptr, (usz)path.len) == 0 && line[path.len] == ' ') {
+            fprintf(tmp, "%s = %s;\n", (char*)path.ptr, &val_buf[0]);
+            found = true;
+        } else {
+            fprintf(tmp, "%s", &line[0]);
+        }
+    }
+    
+    // Якщо не знайшли ключ у файлі, додаємо його в кінець
+    if (!found) {
+        fprintf(tmp, "%s = %s;\n", (ZString)path.ptr, &val_buf[0]);
+    }
+    
+    fclose(f);
+    fclose(tmp);
+    
+    // Замінюємо старий файл новим
+    libc::remove((ZString)file_path);
+    libc::rename((ZString)tmp_path, (ZString)file_path);
+    
+    io::printfn("[Config Info] Змінну '%s' безпечно оновлено у файлі.", (ZString)path.ptr);
+    return true;
+}
+// ------------------------------------------
+// Геттери
+// ------------------------------------------
 
 fn long ce_get_int_def(ConfigEngine* ce, String path, long default_val) {
     Node* n = ce_resolve_path(ce, path);
     if (n == null) {
-        io::printfn("[Config Info] Поле '%s' відсутнє. Використано default: %d", path, default_val);
+        io::printfn("[Config Info] Поле '%s' відсутнє. Використано default: %d", (ZString)path.ptr, default_val);
         return default_val;
     }
     if (ce_evaluate(ce, n)) {
         if (n.type == NodeType.INT) return n.data.int_val;
         if (n.type == NodeType.FLOAT) return (long)n.data.float_val;
         
-        io::printfn("[Config Warn] Поле '%s' має невідповідний тип (очікувався int). Використано default: %d", path, default_val);
+        io::printfn("[Config Warn] Поле '%s' має невідповідний тип. Використано default: %d", (ZString)path.ptr, default_val);
     }
     return default_val;
 }
@@ -596,14 +748,14 @@ fn long ce_get_int(ConfigEngine* ce, String path) {
 fn double ce_get_float_def(ConfigEngine* ce, String path, double default_val) {
     Node* n = ce_resolve_path(ce, path);
     if (n == null) {
-        io::printfn("[Config Info] Поле '%s' відсутнє. Використано default: %f", path, default_val);
+        io::printfn("[Config Info] Поле '%s' відсутнє. Використано default: %f", (ZString)path.ptr, default_val);
         return default_val;
     }
     if (ce_evaluate(ce, n)) {
         if (n.type == NodeType.FLOAT) return n.data.float_val;
         if (n.type == NodeType.INT) return (double)n.data.int_val;
 
-        io::printfn("[Config Warn] Поле '%s' має невідповідний тип (очікувався float). Використано default: %f", path, default_val);
+        io::printfn("[Config Warn] Поле '%s' має невідповідний тип. Використано default: %f", (ZString)path.ptr, default_val);
     }
     return default_val;
 }
@@ -615,13 +767,13 @@ fn double ce_get_float(ConfigEngine* ce, String path) {
 fn ZString ce_get_string_def(ConfigEngine* ce, String path, ZString default_val) {
     Node* n = ce_resolve_path(ce, path);
     if (n == null) {
-        io::printfn("[Config Info] Поле '%s' відсутнє. Використано default: %s", path, default_val);
+        io::printfn("[Config Info] Поле '%s' відсутнє. Використано default: %s", (ZString)path.ptr, default_val);
         return default_val;
     }
     if (ce_evaluate(ce, n)) {
-        if (n.type == NodeType.STRING) return (ZString)n.data.string_val;
+        if (n.type == NodeType.STRING) return (ZString)n.data.string_val.ptr;
 
-        io::printfn("[Config Warn] Поле '%s' має невідповідний тип (очікувався string). Використано default: %s", path, default_val);
+        io::printfn("[Config Warn] Поле '%s' має невідповідний тип. Використано default: %s", (ZString)path.ptr, default_val);
     }
     return default_val;
 }

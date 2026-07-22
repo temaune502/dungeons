@@ -6,6 +6,7 @@ import std::core::mem::allocators;
 import onyx;
 import file_watcher;
 import main::player;
+import std::core::string;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 const int SPEED = 90;
@@ -87,9 +88,9 @@ fn void load_config()
 	onyx::ce_init(&ce);
 	core.ce = &ce;
 	//TODO: виявляється якщо <type>? можна задати значення заумовчання через ??
-	char[] config_data =  file::load_temp("configs/config.onx") ?? "Cringe";
-	onyx::ce_parse(&ce, (String)config_data);
-
+	//char[] config_data =  file::load_temp("configs/config.onx") ?? "Cringe";
+	//onyx::ce_parse(&ce, (String)config_data);
+	onyx::ce_parse_file(&ce, "configs/config.onx");
 	core.config.window_title = onyx::ce_get_string_def(core.ce,"config.window.window_title", "Default");
 	core.player.camera.zoom = (float)onyx::ce_get_float_def(core.ce,"config.player.zoom", 0.10);
 	core.player.animation_speed = (float)onyx::ce_get_float_def(core.ce,"config.player.animation_speed", 0.10);
@@ -133,10 +134,11 @@ fn int main(String[] args)
 	String config_path = string::format(tmem,"%s/configs", path);
 	
 
-	BackedArenaAllocator* arena = allocators::new_backed_allocator(131072, mem)!!;
+	DynamicArenaAllocator arena = {};
+	arena.init(mem, 8192/2);
     FileWatcher fw;
 
-    if (!file_watcher::fw_init(&fw, arena, "configs/", 20))
+    if (!file_watcher::fw_init(&fw, &arena, "configs/", 20))
     {
         io::printn("Помилка ініціалізації.");
         return 1;
@@ -161,8 +163,6 @@ fn int main(String[] args)
 	core.half_window = half_window;
 
 	
-	RLVector2 tempp = {1,1};
-
 	while (!rl::window_should_close())
 	{
 		float delta = rl::get_frame_time();
@@ -221,8 +221,28 @@ fn int main(String[] args)
 				.width = 16,
 				.height = 16
 			};
+			if(gui::do_button((RLRectangle){.x = core.half_window.x,.y = core.half_window.y+50,.width = 80,.height = 40},"Back" , 22, standart_style))
+			{
+				core.state = GAME;
+			}
+			// if(gui::do_button((RLRectangle){.x = core.half_window.x,.y = core.half_window.y+80,.width = 80,.height = 40},"Change config" , 22, standart_style))
+			// {
+			// 	Node* new_val = onyx::create_node(core.ce.allocator, NodeType.INT);
+			// 	new_val.data.int_val = 8080;
+			// 	new_val.state = EvalState.RESOLVED;
 
-			render::draw_tiled_region(main::core.assets.background, rect, (RLVector2){0,0}, core.window_size.x, core.window_size.y);
+			// 	onyx::ce_set_path(core.ce, "config.fps", new_val);
+
+			// 	bool success = onyx::ce_save_node_smart(core.ce, "config.fps", "configs/config.onx");
+			// 	if (success) {
+			// 		io::printn("Конфіг успішно оновлено у файлі!");
+			// 	} else {
+			// 		io::printn("Помилка: неможливо зберегти (можливо це був вираз?)");
+			// 	}
+			// }
+
+			//render::draw_tiled_region(main::core.assets.background, rect, (RLVector2){0,0}, core.window_size.x, core.window_size.y);
+
 			rl::draw_text((ZString)"Game paused!", (int)core.half_window.x-(rl::measure_text((ZString)"Game of my Dream", 22)/2), (int)core.half_window.y-120, 22,rl::WHITE);
 		}
 		rl::draw_fps(0, 0);
